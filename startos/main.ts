@@ -7,14 +7,13 @@ import {
   internalRpcPort,
   Network,
 } from './utils'
-import { storeJson } from './file-models/store.json'
-import { knuthConf } from './file-models/knuth.conf'
+import { i18n } from './i18n'
+import { storeJson } from './fileModels/store.json'
+import { knuthConf } from './fileModels/knuth.conf'
 import { mainMounts } from './mounts'
 
-export { mainMounts }
-
 export const main = sdk.setupMain(async ({ effects }) => {
-  console.log('Starting Knuth!')
+  console.info(i18n('Starting Knuth!'))
 
   const store = await storeJson.read().once()
   const network: Network = store?.network ?? 'mainnet'
@@ -171,7 +170,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
         ready: {
           // Same row label as BCHN/BCHD/Flowee. Do not stall the whole health
           // page if RPC is off or still coming up — other checks require this.
-          display: 'RPC',
+          display: i18n('RPC'),
           fn: async () => {
             if (rpcEnabled) {
               try {
@@ -180,7 +179,12 @@ export const main = sdk.setupMain(async ({ effects }) => {
                   const body = JSON.parse(String(res.stdout))
                   if (body?.result) {
                     return {
-                      message: `The Knuth RPC interface is ready (${netLabel})`,
+                      message: i18n(
+                        'The Knuth RPC interface is ready (${network})',
+                        {
+                          network: netLabel,
+                        },
+                      ),
                       result: 'success' as const,
                     }
                   }
@@ -188,26 +192,25 @@ export const main = sdk.setupMain(async ({ effects }) => {
               } catch {
                 /* fall through */
               }
-              if (await nodeIsUp()) {
-                return {
-                  message: 'The Knuth RPC interface is not ready',
-                  result: 'starting' as const,
-                }
-              }
               return {
-                message: 'The Knuth RPC interface is not ready',
+                message: i18n('The Knuth RPC interface is not ready'),
                 result: 'starting' as const,
               }
             }
 
             if (await nodeIsUp()) {
               return {
-                message: `JSON-RPC is off — node is running (${netLabel})`,
+                message: i18n(
+                  'JSON-RPC is off — the node is running (${network})',
+                  {
+                    network: netLabel,
+                  },
+                ),
                 result: 'success' as const,
               }
             }
             return {
-              message: 'Knuth is starting...',
+              message: i18n('Knuth is starting...'),
               result: 'starting' as const,
             }
           },
@@ -237,11 +240,13 @@ export const main = sdk.setupMain(async ({ effects }) => {
             : ['sh', '-c', 'exec tail -f /dev/null'],
         },
         ready: {
-          display: 'RPC Compat',
+          display: i18n('RPC Compatibility'),
           fn: async () => {
             if (!rpcEnabled) {
               return {
-                message: 'JSON-RPC is off — compatibility sidecar idle',
+                message: i18n(
+                  'JSON-RPC is off — the compatibility sidecar is idle',
+                ),
                 result: 'disabled' as const,
               }
             }
@@ -260,7 +265,9 @@ export const main = sdk.setupMain(async ({ effects }) => {
               const code = String(res.stdout ?? '').trim()
               if (code === '401' || code === '200') {
                 return {
-                  message: 'Bitcoin-RPC compatibility sidecar is serving dependents',
+                  message: i18n(
+                    'The Bitcoin-RPC compatibility sidecar is serving dependents',
+                  ),
                   result: 'success' as const,
                 }
               }
@@ -268,7 +275,9 @@ export const main = sdk.setupMain(async ({ effects }) => {
               /* fall through */
             }
             return {
-              message: 'Bitcoin-RPC compatibility sidecar is starting',
+              message: i18n(
+                'The Bitcoin-RPC compatibility sidecar is starting',
+              ),
               result: 'starting' as const,
             }
           },
@@ -277,7 +286,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
       })
       .addHealthCheck('sync-progress', {
         ready: {
-          display: 'Blockchain Sync',
+          display: i18n('Blockchain Sync'),
           fn: async () => {
             const logHeights = parseLogHeights(await debugLogSnippet())
 
@@ -302,7 +311,12 @@ export const main = sdk.setupMain(async ({ effects }) => {
                     }
                     if (headers === 0) {
                       return {
-                        message: `Connecting to ${netLabel} peers and fetching headers...`,
+                        message: i18n(
+                          'Connecting to ${network} peers and fetching headers...',
+                          {
+                            network: netLabel,
+                          },
+                        ),
                         result: 'loading' as const,
                       }
                     }
@@ -315,12 +329,21 @@ export const main = sdk.setupMain(async ({ effects }) => {
                     if (blocks < headers && !nearTip) {
                       const pct = ((blocks / headers) * 100).toFixed(2)
                       return {
-                        message: `Syncing blocks... ${pct}% (${netLabel})`,
+                        message: i18n(
+                          'Syncing blocks... ${percent}% (${network})',
+                          {
+                            percent: pct,
+                            network: netLabel,
+                          },
+                        ),
                         result: 'loading' as const,
                       }
                     }
                     return {
-                      message: `Synced — block ${Math.max(blocks, headers)} (${netLabel})`,
+                      message: i18n('Synced — block ${height} (${network})', {
+                        height: Math.max(blocks, headers),
+                        network: netLabel,
+                      }),
                       result: 'success' as const,
                     }
                   }
@@ -333,7 +356,12 @@ export const main = sdk.setupMain(async ({ effects }) => {
             const heights = logHeights
             if (!heights || (heights.headers === 0 && heights.blocks === 0)) {
               return {
-                message: `Connecting to ${netLabel} peers and fetching headers...`,
+                message: i18n(
+                  'Connecting to ${network} peers and fetching headers...',
+                  {
+                    network: netLabel,
+                  },
+                ),
                 result: 'loading' as const,
               }
             }
@@ -348,12 +376,18 @@ export const main = sdk.setupMain(async ({ effects }) => {
                 100
               ).toFixed(2)
               return {
-                message: `Syncing blocks... ${pct}% (${netLabel})`,
+                message: i18n('Syncing blocks... ${percent}% (${network})', {
+                  percent: pct,
+                  network: netLabel,
+                }),
                 result: 'loading' as const,
               }
             }
             return {
-              message: `Synced — block ${Math.max(heights.blocks, heights.headers)} (${netLabel})`,
+              message: i18n('Synced — block ${height} (${network})', {
+                height: Math.max(heights.blocks, heights.headers),
+                network: netLabel,
+              }),
               result: 'success' as const,
             }
           },
@@ -375,31 +409,36 @@ export const main = sdk.setupMain(async ({ effects }) => {
       })
       .addHealthCheck('peer-connections', {
         ready: {
-          display: 'Peer Connections',
+          display: i18n('Peer Connections'),
           fn: async () => {
             const count = parsePeerCount(await debugLogSnippet())
             if (count === null) {
               return {
-                message:
-                  'No peers connected — node may be starting up or isolated',
+                message: i18n(
+                  'No peers connected — the node may be starting up or isolated',
+                ),
                 result: 'loading' as const,
               }
             }
             if (count === 0) {
               return {
-                message:
-                  'No peers connected — node may be starting up or isolated',
+                message: i18n(
+                  'No peers connected — the node may be starting up or isolated',
+                ),
                 result: 'loading' as const,
               }
             }
             if (count < 3) {
               return {
-                message: `Only ${count} peer(s) connected — network connectivity may be limited`,
+                message: i18n(
+                  'Only ${count} peer(s) connected — network connectivity may be limited',
+                  { count },
+                ),
                 result: 'loading' as const,
               }
             }
             return {
-              message: `${count} peers`,
+              message: i18n('${count} peers', { count }),
               result: 'success' as const,
             }
           },
@@ -408,29 +447,31 @@ export const main = sdk.setupMain(async ({ effects }) => {
       })
       .addHealthCheck('tor', {
         ready: {
-          display: 'Tor',
+          display: i18n('Tor'),
           fn: () => {
             if (!torEnabled) {
               return {
                 result: 'disabled' as const,
-                message: 'Tor is optional and currently off',
+                message: i18n('Tor routing is turned off'),
               }
             }
             if (!torIp) {
               return {
                 result: 'disabled' as const,
-                message: 'Tor is not installed',
+                message: i18n('Tor is not installed'),
               }
             }
             if (!torRunning) {
               return {
                 result: 'disabled' as const,
-                message: 'Tor is not running',
+                message: i18n('Tor is not running'),
               }
             }
             return {
               result: 'success' as const,
-              message: 'Outbound only. Add an onion address to enable inbound.',
+              message: i18n(
+                'Outbound only. Add an onion address to enable inbound.',
+              ),
             }
           },
         },
@@ -438,20 +479,22 @@ export const main = sdk.setupMain(async ({ effects }) => {
       })
       .addHealthCheck('i2p', {
         ready: {
-          display: 'I2P',
+          display: i18n('I2P'),
           fn: () => ({
             result: 'disabled' as const,
-            message: 'I2P support is not implemented yet.',
+            message: i18n('I2P is not supported by this package'),
           }),
         },
         requires: [],
       })
       .addHealthCheck('clearnet', {
         ready: {
-          display: 'Clearnet',
+          display: i18n('Clearnet'),
           fn: () => ({
             result: 'success' as const,
-            message: 'Outbound only. Publish an IP address to enable inbound.',
+            message: i18n(
+              'Outbound only. Publish an IP address to enable inbound.',
+            ),
           }),
         },
         requires: [],
@@ -462,12 +505,14 @@ export const main = sdk.setupMain(async ({ effects }) => {
       // JSON-RPC, verified against the running node).
       .addHealthCheck('utxoz', {
         ready: {
-          display: 'UTXO-Z Storage',
+          display: i18n('UTXO-Z Storage'),
           fn: async () => {
             if (!utxozEnabled)
               return {
                 result: 'disabled' as const,
-                message: 'UTXO-Z capability is disabled in Node Settings',
+                message: i18n(
+                  'The UTXO-Z capability is turned off in Node Settings',
+                ),
               }
             try {
               const res = await knuthSub.exec([
@@ -478,16 +523,20 @@ export const main = sdk.setupMain(async ({ effects }) => {
               if (res.exitCode === 0)
                 return {
                   result: 'success' as const,
-                  message: `UTXO-Z database active at ${dataDir}/utxoz`,
+                  message: i18n('The UTXO-Z database is active'),
                 }
               return {
                 result: 'loading' as const,
-                message: 'Waiting for the UTXO-Z database to be created...',
+                message: i18n(
+                  'Waiting for the UTXO-Z database to be created...',
+                ),
               }
             } catch {
               return {
                 result: 'loading' as const,
-                message: 'Waiting for the UTXO-Z database to be created...',
+                message: i18n(
+                  'Waiting for the UTXO-Z database to be created...',
+                ),
               }
             }
           },
@@ -496,18 +545,20 @@ export const main = sdk.setupMain(async ({ effects }) => {
       })
       .addHealthCheck('ipc-capi', {
         ready: {
-          display: 'IPC / C-API',
+          display: i18n('IPC / C-API'),
           fn: () =>
             ipcEnabled
               ? {
                   result: 'success' as const,
-                  message:
-                    'C-API capability advertised for dependent services (in-process binding, not a network port)',
+                  message: i18n(
+                    'The C-API capability is advertised to dependent services',
+                  ),
                 }
               : {
                   result: 'disabled' as const,
-                  message:
-                    'IPC / C-API capability is disabled in Node Settings',
+                  message: i18n(
+                    'The IPC / C-API capability is turned off in Node Settings',
+                  ),
                 },
         },
         requires: [],

@@ -1,25 +1,21 @@
 import { sdk } from '../sdk'
-import { knuthConf } from '../file-models/knuth.conf'
-import { storeJson } from '../file-models/store.json'
+import { knuthConf } from '../fileModels/knuth.conf'
+import { storeJson } from '../fileModels/store.json'
 import {
+  generateRpcPassword,
+  internalRpcPort,
   networkPorts,
   networkDbDir,
   networkHostsFile,
   Network,
+  rpcUser,
 } from '../utils'
 
-const randomHex = (bytes: number) =>
-  Array.from({ length: bytes }, () =>
-    Math.floor(Math.random() * 256)
-      .toString(16)
-      .padStart(2, '0'),
-  ).join('')
-
-// BCHN/Flowee pattern: seed once on install; keep credentials stable forever.
+// Seed once on install so the credential stays stable across updates.
 export const seedFiles = sdk.setupOnInit(async (effects, kind) => {
   if (kind !== 'install') return
 
-  const rpcPassword = randomHex(16)
+  const rpcPassword = generateRpcPassword()
 
   await storeJson.merge(effects, {
     network: 'mainnet',
@@ -27,7 +23,7 @@ export const seedFiles = sdk.setupOnInit(async (effects, kind) => {
     utxozEnabled: true,
     torEnabled: false,
     rpcEnabled: false,
-    rpcUser: 'knuth',
+    rpcUser,
     rpcPassword,
   })
 
@@ -42,8 +38,8 @@ export const seedFiles = sdk.setupOnInit(async (effects, kind) => {
     'db.directory': networkDbDir(network),
     'db.db_mode': 'full',
     'rpc.bind': '127.0.0.1',
-    'rpc.port': 19332,
-    'rpc.user': 'knuth',
+    'rpc.port': internalRpcPort,
+    'rpc.user': rpcUser,
     'rpc.password': rpcPassword,
     'rpc.enabled': false,
   })
