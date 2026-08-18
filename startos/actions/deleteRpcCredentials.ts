@@ -1,6 +1,7 @@
+import { i18n } from '../i18n'
 import { sdk } from '../sdk'
-import { storeJson } from '../file-models/store.json'
-import { knuthConf } from '../file-models/knuth.conf'
+import { storeJson } from '../fileModels/store.json'
+import { knuthConf } from '../fileModels/knuth.conf'
 
 // kth falls back to a generated .cookie file when rpc.user / rpc.password are
 // empty, so clearing them does not lock the node out — it just revokes the
@@ -9,11 +10,11 @@ export const deleteRpcCredentials = sdk.Action.withoutInput(
   'delete-rpc-credentials',
 
   async ({ effects: _effects }) => ({
-    name: 'Delete RPC Credentials',
-    description:
-      'Clear the stored RPC username and password. Services using them will no longer be able to authenticate after the next restart.',
-    warning:
-      'Any wallet, indexer or miner configured with these credentials will stop working until new ones are generated.',
+    name: i18n('Delete RPC Credentials'),
+    description: i18n('Clear the stored JSON-RPC username and password.'),
+    warning: i18n(
+      'Any wallet, indexer, or miner configured with these credentials stops working until you generate new ones.',
+    ),
     allowedStatuses: 'any' as const,
     group: 'Credentials',
     visibility: 'enabled' as const,
@@ -26,9 +27,10 @@ export const deleteRpcCredentials = sdk.Action.withoutInput(
 
     return {
       version: '1' as const,
-      title: 'RPC Credentials Deleted',
-      message:
-        'The RPC username and password have been cleared and the node is restarting. Knuth will fall back to a .cookie file until you generate new credentials.',
+      title: i18n('RPC Credentials Deleted'),
+      message: i18n(
+        'The JSON-RPC username and password have been cleared and the node is restarting. Knuth falls back to a generated cookie file until you create new credentials.',
+      ),
       result: null,
     }
   },

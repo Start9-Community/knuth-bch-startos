@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto'
+
 export const peerInterfaceId = 'peer'
 export const rpcInterfaceId = 'rpc'
 export const rootDir = '/data'
@@ -16,12 +18,12 @@ export type Network = (typeof NETWORKS)[number]
 
 // Field order matches BCHN utils (rpc, peer).
 export const networkPorts: Record<Network, { rpc: number; peer: number }> = {
-  mainnet:  { rpc: 8332,  peer: 8333  },
+  mainnet: { rpc: 8332, peer: 8333 },
   testnet3: { rpc: 18332, peer: 18333 },
   testnet4: { rpc: 28332, peer: 28333 },
   scalenet: { rpc: 38332, peer: 38333 },
-  chipnet:  { rpc: 48332, peer: 48333 },
-  regtest:  { rpc: 18443, peer: 18444 },
+  chipnet: { rpc: 48332, peer: 48333 },
+  regtest: { rpc: 18443, peer: 18444 },
 }
 
 // kth v1.3.0 selects the network with a valued option (`--network <name>` / `-n`),
@@ -30,12 +32,12 @@ export const networkPorts: Record<Network, { rpc: number; peer: number }> = {
 // `--network chipnet` logs "Network: Chipnet" and seeds chipnet.imaginary.cash:48333,
 // while `--chipnet` seeds mainnet on :8333.
 export const networkName: Record<Network, string> = {
-  mainnet:  'mainnet',
+  mainnet: 'mainnet',
   testnet3: 'testnet',
   testnet4: 'testnet4',
   scalenet: 'scalenet',
-  chipnet:  'chipnet',
-  regtest:  'regtest',
+  chipnet: 'chipnet',
+  regtest: 'regtest',
 }
 
 // Same layout as BCHN/BCHD/Flowee on StartOS:
@@ -57,3 +59,7 @@ export const peerPort = networkPorts.mainnet.peer
 // kth v1.3.0 fetch_block() is a stub (blk*.dat not wired). Dependents talk to
 // the rpc_compat sidecar on the public RPC port; kth itself listens here.
 export const internalRpcPort = 19332
+
+export const rpcUser = 'knuth'
+
+export const generateRpcPassword = () => randomBytes(16).toString('hex')

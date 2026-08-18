@@ -1,6 +1,6 @@
-import { FileHelper, VersionInfo, z } from '@start9labs/start-sdk'
+import { FileHelper, IMPOSSIBLE, VersionInfo, z } from '@start9labs/start-sdk'
 import { sdk } from '../sdk'
-import { knuthConf } from '../file-models/knuth.conf'
+import { knuthConf } from '../fileModels/knuth.conf'
 
 const iniNumber = z.union([z.string().transform(Number), z.number()])
 
@@ -28,13 +28,18 @@ const legacyConf = FileHelper.ini(
 
 export const v_1_3_0_1 = VersionInfo.of({
   version: '1.3.0:1',
-  releaseNotes:
-    'Knuth v1.3.0 adds a BCH mempool, block-template assembly and an optional ' +
-    'JSON-RPC server. This release wires that up: a JSON-RPC toggle with ' +
-    'generated credentials and a per-network RPC interface, replacing the ' +
-    'placeholder "coming soon" action. Also realigns kth.cfg with the config ' +
-    'keys renamed upstream in v1.3.0 (network.* -> net.*, database.* -> db.*, ' +
-    'blockchain.* -> chain.*); existing settings are carried over automatically.',
+  releaseNotes: {
+    en_US:
+      'Knuth 1.3.0 adds a Bitcoin Cash mempool, block-template assembly, and an optional JSON-RPC server. This release wires that up: a JSON-RPC toggle with generated credentials and a per-network RPC interface. Existing settings are carried over to the configuration keys upstream renamed in 1.3.0.',
+    es_ES:
+      'Knuth 1.3.0 añade una mempool de Bitcoin Cash, ensamblado de plantillas de bloque y un servidor JSON-RPC opcional. Esta versión lo integra: un interruptor JSON-RPC con credenciales generadas y una interfaz RPC por red. Los ajustes existentes se trasladan a las claves de configuración renombradas por el proyecto en 1.3.0.',
+    de_DE:
+      'Knuth 1.3.0 bringt einen Bitcoin-Cash-Mempool, Blockvorlagen-Erstellung und einen optionalen JSON-RPC-Server. Diese Version bindet das ein: einen JSON-RPC-Schalter mit erzeugten Zugangsdaten und eine RPC-Schnittstelle je Netzwerk. Bestehende Einstellungen werden auf die in 1.3.0 umbenannten Konfigurationsschlüssel übertragen.',
+    pl_PL:
+      'Knuth 1.3.0 dodaje mempool Bitcoin Cash, składanie szablonów bloków i opcjonalny serwer JSON-RPC. To wydanie je udostępnia: przełącznik JSON-RPC z generowanymi danymi logowania oraz interfejs RPC osobny dla każdej sieci. Istniejące ustawienia są przenoszone na klucze konfiguracyjne przemianowane w wersji 1.3.0.',
+    fr_FR:
+      "Knuth 1.3.0 ajoute un mempool Bitcoin Cash, l'assemblage de modèles de blocs et un serveur JSON-RPC facultatif. Cette version l'intègre : un interrupteur JSON-RPC avec identifiants générés et une interface RPC par réseau. Les réglages existants sont reportés sur les clés de configuration renommées en amont dans la 1.3.0.",
+  },
   migrations: {
     up: async ({ effects }) => {
       const old = await legacyConf.read().once()
@@ -70,6 +75,6 @@ export const v_1_3_0_1 = VersionInfo.of({
         await knuthConf.merge(effects, carried as never)
       }
     },
-    down: async ({ effects }) => {},
+    down: IMPOSSIBLE,
   },
 })

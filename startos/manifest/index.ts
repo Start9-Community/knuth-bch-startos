@@ -1,33 +1,28 @@
 import { setupManifest } from '@start9labs/start-sdk'
+import { long, short, torDescription } from './i18n'
 
 export const manifest = setupManifest({
   id: 'knuth-bch',
   title: 'Knuth',
   license: 'MIT',
-  packageRepo: 'https://github.com/BitcoinCash1/knuth-bch-startos',
+  packageRepo: 'https://github.com/Start9-Community/knuth-bch-startos',
   upstreamRepo: 'https://github.com/k-nuth/kth',
   marketingUrl: 'https://kth.cash',
   donationUrl: null,
-  docsUrls: [
-    'https://github.com/BitcoinCash1/knuth-bch-startos/blob/master/instructions.md',
-    'https://github.com/k-nuth/kth',
-  ],
-  description: {
-    short: 'Knuth — High-performance C++ BCH full node',
-    long: 'Knuth is a high-performance Bitcoin Cash full node written in C++. It validates blocks, relays transactions, and syncs the BCH blockchain. This package exposes node settings, an optional Bitcoin-Cash-compatible JSON-RPC interface (Knuth v1.3.0+, including getblocktemplatelight and submitblocklight for mining pools), plus IPC/C-API and UTXOZ compatibility capabilities. gRPC is not exposed in this package version.',
-  },
+  description: { short, long },
   volumes: ['main'],
   images: {
     knuth: {
       source: { dockerBuild: {} },
       arch: ['x86_64', 'aarch64', 'riscv64'],
+      // The kth toolchain image is amd64 only, so the other arches run this
+      // image under emulation rather than getting a native build.
       emulateMissingAs: 'x86_64',
     },
   },
   dependencies: {
     tor: {
-      description:
-        'Enables Tor onion routing for anonymous peer-to-peer connections. When Tor is installed and Tor Routing is enabled in Node Settings, Knuth can route outbound connections through the Tor network for enhanced privacy.',
+      description: torDescription,
       optional: true,
       metadata: {
         title: 'Tor',
