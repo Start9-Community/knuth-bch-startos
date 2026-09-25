@@ -38,11 +38,15 @@ export const rebuildChainData = sdk.Action.withoutInput(
       async (sub) => {
         // Remove the chain databases but keep the directory and peers.dat,
         // which lives outside these subpaths.
-        await sub.exec([
-          'sh',
-          '-c',
-          `rm -rf ${dir}/utxoz ${dir}/blocks ${dir}/*.ldb ${dir}/header_index ${dir}/mempool.dat || true`,
-        ])
+        await sub.exec(
+          [
+            'sh',
+            '-c',
+            `rm -rf ${dir}/utxoz ${dir}/blocks ${dir}/*.ldb ${dir}/header_index ${dir}/mempool.dat || true`,
+          ],
+          undefined,
+          null,
+        )
       },
     )
 

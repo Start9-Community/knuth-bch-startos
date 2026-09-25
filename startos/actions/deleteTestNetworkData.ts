@@ -83,7 +83,12 @@ export const deleteTestNetworkData = sdk.Action.withInput(
       async (sub) => {
         for (const net of networks) {
           const subdir = testNetSubdirs[net]
-          if (subdir) await sub.exec(['rm', '-rf', `${rootDir}/${subdir}`])
+          if (subdir)
+            await sub.exec(
+              ['rm', '-rf', `${rootDir}/${subdir}`],
+              undefined,
+              null,
+            )
         }
       },
     )
