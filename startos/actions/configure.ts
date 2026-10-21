@@ -1,13 +1,16 @@
+import { i18n } from '../i18n'
 import { sdk } from '../sdk'
-import { knuthConf, fullConfigSpec } from '../file-models/knuth.conf'
-import { storeJson } from '../file-models/store.json'
+import { knuthConf, fullConfigSpec } from '../fileModels/knuth.conf'
+import { storeJson } from '../fileModels/store.json'
 
 export const configure = sdk.Action.withInput(
   'node-settings',
 
   async ({ effects }) => ({
-    name: 'Node Settings',
-    description: 'Core node behavior, database mode, IPC capabilities, and UTXOZ support.',
+    name: i18n('Node Settings'),
+    description: i18n(
+      'Core node behavior, database mode, and the capabilities advertised to dependent services.',
+    ),
     warning: null,
     allowedStatuses: 'any',
     group: 'Configuration',
@@ -28,7 +31,8 @@ export const configure = sdk.Action.withInput(
       blockLatencySeconds: conf?.['node.block_latency_seconds'] ?? 60,
       databaseMode: dbMode,
       // dbMaxSize stored as bytes in kth.cfg; show as GB in UI only when pruned
-      dbMaxSize: dbMode === 'pruned' ? Math.round((rawMaxSize as number) / 1e9) : null,
+      dbMaxSize:
+        dbMode === 'pruned' ? Math.round((rawMaxSize as number) / 1e9) : null,
       rpcEnabled: store?.rpcEnabled ?? false,
       ipcEnabled: store?.ipcEnabled ?? true,
       utxozEnabled: store?.utxozEnabled ?? true,
@@ -37,7 +41,10 @@ export const configure = sdk.Action.withInput(
   },
 
   async ({ effects, input }) => {
-    const dbMode = (input.databaseMode ?? 'full') as 'full' | 'blocks' | 'pruned'
+    const dbMode = (input.databaseMode ?? 'full') as
+      | 'full'
+      | 'blocks'
+      | 'pruned'
     const dbMaxSizeGb = input.dbMaxSize
     const dbMaxSizeBytes =
       dbMode === 'pruned' && dbMaxSizeGb
@@ -70,10 +77,8 @@ export const configure = sdk.Action.withInput(
       torEnabled: input.torEnabled ?? false,
     })
 
-    // rpcEnabled/ipcEnabled/utxozEnabled/torEnabled live in store.json, which
-    // main reads with .once() — without an explicit restart the toggle would
-    // save but never take effect. kth.cfg is watched via .const, but restarting
-    // once here covers both.
+    // main reads store.json with .once() and kth is only handed kth.cfg at
+    // process start, so neither takes effect without this.
     await effects.restart()
 
     return null

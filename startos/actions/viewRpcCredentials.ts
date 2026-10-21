@@ -1,14 +1,16 @@
+import { i18n } from '../i18n'
 import { sdk } from '../sdk'
-import { storeJson } from '../file-models/store.json'
+import { storeJson } from '../fileModels/store.json'
 import { networkPorts, Network } from '../utils'
 
 export const viewRpcCredentials = sdk.Action.withoutInput(
   'rpc-credentials',
 
   async ({ effects: _effects }) => ({
-    name: 'RPC Credentials',
-    description:
-      'View the JSON-RPC username, password and port for connecting mining pools and other services.',
+    name: i18n('RPC Credentials'),
+    description: i18n(
+      'View the JSON-RPC username, password, and port for connecting mining pools and other services.',
+    ),
     warning: null,
     allowedStatuses: 'any' as const,
     group: 'Credentials',
@@ -23,26 +25,32 @@ export const viewRpcCredentials = sdk.Action.withoutInput(
     if (!store?.rpcEnabled) {
       return {
         version: '1' as const,
-        title: 'RPC Credentials',
-        message:
-          'The JSON-RPC server is currently disabled. Enable it under Node Settings → JSON-RPC Server.',
+        title: i18n('RPC Credentials'),
+        message: i18n(
+          'The JSON-RPC server is turned off. Turn it on under Node Settings.',
+        ),
         result: null,
       }
     }
 
     return {
       version: '1' as const,
-      title: 'RPC Credentials',
-      message: `JSON-RPC is listening on port ${rpcPort} (${network}).`,
+      title: i18n('RPC Credentials'),
+      message: i18n('JSON-RPC is listening on port ${port} (${network}).', {
+        port: rpcPort,
+        network,
+      }),
       result: {
         type: 'group' as const,
-        name: 'JSON-RPC',
-        description: 'Credentials for connecting mining pools and other services',
+        name: i18n('JSON-RPC'),
+        description: i18n(
+          'Credentials for connecting mining pools and other services',
+        ),
         value: [
           {
             type: 'single' as const,
-            name: 'Username',
-            description: 'JSON-RPC username',
+            name: i18n('Username'),
+            description: i18n('JSON-RPC username'),
             value: store?.rpcUser ?? '',
             copyable: true,
             qr: false,
@@ -50,8 +58,8 @@ export const viewRpcCredentials = sdk.Action.withoutInput(
           },
           {
             type: 'single' as const,
-            name: 'Password',
-            description: 'JSON-RPC password',
+            name: i18n('Password'),
+            description: i18n('JSON-RPC password'),
             value: store?.rpcPassword ?? '',
             copyable: true,
             qr: false,
@@ -59,8 +67,8 @@ export const viewRpcCredentials = sdk.Action.withoutInput(
           },
           {
             type: 'single' as const,
-            name: 'Port',
-            description: 'JSON-RPC port for this network',
+            name: i18n('Port'),
+            description: i18n('JSON-RPC port for this network'),
             value: String(rpcPort),
             copyable: true,
             qr: false,
