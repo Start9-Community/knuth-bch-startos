@@ -1,16 +1,14 @@
 # Updating the upstream version
 
-This package builds **Knuth** (k-nuth/kth) from source using `Dockerfile.binary`.
-Upstream releases live at [github.com/k-nuth/kth](https://github.com/k-nuth/kth/releases).
+This package builds **Knuth** ([k-nuth/kth](https://github.com/k-nuth/kth)) from source in the `Dockerfile`.
 
 ## Determining the upstream version
 
-Check the latest tag on the [releases page](https://github.com/k-nuth/kth/releases).
-The current pin is `ARG KNUTH_VERSION=` in `Dockerfile.binary`.
+Check the latest tag on the [releases page](https://github.com/k-nuth/kth/releases); tags carry a leading `v` (`v1.3.0`). The current pin is `ARG KNUTH_VERSION=` in the `Dockerfile`. The build installs that version from the kth Conan remote (`packages.kth.cash`).
 
 ## Applying the bump
 
-1. Update `ARG KNUTH_VERSION=v<new version>` in `Dockerfile.binary`.
-2. Add a new `startos/versions/v<X>.<Y>.<Z>.0.ts` file and update `startos/versions/index.ts` to set it as `current`.
-3. Update version references in `README.md` and `instructions.md`.
-4. Trigger the **Build Binary Image** workflow (`workflow_dispatch`) — Knuth compiles from source (30-60+ min) and then auto-triggers `tagAndRelease`.
+1. Set `ARG KNUTH_VERSION=<new version>` in the `Dockerfile`, **without** the `v` (Conan takes `1.3.0`, not `v1.3.0`).
+2. Update the upstream version stated in `README.md`.
+
+The build stage runs on `ARG TOOLCHAIN=kthnode/gcc15-ubuntu24.04@sha256:<digest>`, the Knuth project's own compiler image, pinned by digest. Keep it on the image Knuth builds the new release with.
