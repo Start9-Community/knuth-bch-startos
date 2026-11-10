@@ -8,7 +8,7 @@ const iniNumber = z.union([z.string().transform(Number), z.number()])
 // database.* -> db.*, blockchain.* -> chain.*, and relay_transactions moved to
 // [node]). kth calls allow_config_extras(), so stale keys are silently ignored
 // rather than rejected — a wrong name here fails quietly.
-export const shape = z.object({
+export const shape = z.looseObject({
   // [log]
   'log.debug_file': z.string().catch('/data/debug.log'),
   'log.error_file': z.string().catch('/data/error.log'),
