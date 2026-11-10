@@ -225,7 +225,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
                 'python3',
                 '/usr/local/bin/rpc_compat.py',
                 '--bind',
-                '0.0.0.0',
+                '::',
                 '--port',
                 String(rpcPort),
                 '--backend',
