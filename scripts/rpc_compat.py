@@ -1165,6 +1165,7 @@ def main() -> int:
     compat = Compat(backend, index)
 
     class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
+        address_family = socket.AF_INET6 if ":" in args.bind else socket.AF_INET
         allow_reuse_address = True
         daemon_threads = True
         request_queue_size = 128

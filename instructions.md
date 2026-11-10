@@ -1,64 +1,54 @@
 # Knuth
 
-Knuth is a high-performance Bitcoin Cash full node written in C++. This page covers
-what is specific to running it on StartOS once it is installed.
-
 ## Documentation
 
-- [Knuth upstream](https://github.com/k-nuth/kth) — source, releases, and operator docs
-- [kth.cash](https://kth.cash) — project site
-- [JSON-RPC (v1.3.0+)](https://github.com/k-nuth/kth/blob/master/docs/json-rpc.md) — methods including mining (`getblocktemplatelight` / `submitblocklight`)
+- [Knuth on GitHub](https://github.com/k-nuth/kth) — the upstream project, its releases, and its README.
+- [JSON-RPC reference](https://github.com/k-nuth/kth/blob/master/docs/json-rpc.md) — every method the node answers, including the mining calls.
 
 ## What you get on StartOS
 
-- A **Bitcoin Cash full node** that validates and relays blocks and transactions
-- **P2P** (port follows the selected network)
-- Optional **JSON-RPC** (Bitcoin-Cash-compatible) for mining pools, Fulcrum, and explorers
-- The same multi-network layout as BCHN / BCHD / Flowee: mainnet under `/data/blockchain`, testnets under `/data/<network>/`
-- Optional **Tor** routing when the Tor package is installed
+A Bitcoin Cash full node that validates blocks, relays transactions, and syncs the chain. It exposes a **Peer Interface** for the Bitcoin Cash network, and — once you turn it on — a **JSON-RPC Interface** other services can call.
 
-## Getting started
+Knuth can run on mainnet or on any of five test networks, and each keeps its own copy of the chain. Switching between them is a setting, not a reinstall, and the network you leave keeps its data for when you come back.
 
-1. Install and start Knuth — Initial Block Download begins immediately on mainnet.
-2. Watch the **Dashboard** health checks — the same rows as BCHN / BCHD / Flowee: **RPC**, **Blockchain Sync** (percent), **Peer Connections**, **Tor** (optional), **I2P**, **Clearnet**.
-3. When you need RPC (pools, Fulcrum, Explorer): **Config → Node Settings → JSON-RPC Server**, then **Actions → RPC Credentials**.
+## Getting set up
 
-## JSON-RPC
+1. Start Knuth. It begins syncing mainnet straight away — expect the initial sync to take a long time and a large amount of disk.
+2. Watch **Blockchain Sync** and **Peer Connections** on the service page to confirm it is making progress.
 
-Off by default. Credentials are generated at install and stay stable.
+That is all that is required. Everything below is optional.
 
-| Network  | P2P   | RPC   |
-|----------|-------|-------|
-| mainnet  | 8333  | 8332  |
-| testnet3 | 18333 | 18332 |
-| testnet4 | 28333 | 28332 |
-| scalenet | 38333 | 38332 |
-| chipnet  | 48333 | 48332 |
-| regtest  | 18444 | 18443 |
+### Choosing a different network
 
-Use the **Interfaces** tab for the RPC endpoint other services should call. gRPC is not exposed in this package.
+Run **Network** and pick one. Knuth restarts, and its peer and JSON-RPC ports change to match the network you chose. If you have never run that network before, it syncs from the beginning.
 
-## Configuration
+### Turning on JSON-RPC
 
-- **Network** — mainnet (default), testnet3, testnet4, scalenet, chipnet, regtest. Switches data directory, P2P port, and RPC port; node restarts automatically. Mainnet data is kept separately when you leave and return.
-- **Node Settings** — database mode (`full` / `blocks` / `pruned`), connections, logging, JSON-RPC, UTXO-Z, IPC, Tor.
+Other services — a mining pool, an indexer like Fulcrum, a block explorer — connect to Knuth over JSON-RPC. It is off until you enable it.
 
-`full` database mode is required for Fulcrum and BCH Explorer.
+1. Run **Node Settings** and turn on **JSON-RPC Server**. Knuth restarts and a **JSON-RPC Interface** appears alongside the Peer Interface.
+2. Run **RPC Credentials** to see the username and password to give that service.
 
-## Tor
+Your credentials are created when Knuth is installed and never change on their own, so a service you configure once keeps working. **Generate RPC Credentials** replaces them if you need to — Knuth only supports one username and password, so everything using the old one stops working until you update it.
 
-**Tor is optional** (same as the other BCH nodes). It always shows on the Knuth **Dependencies** tab. Knuth runs on clearnet without Tor running; install the Tor package and enable **Tor Routing** in Node Settings only if you want outbound peer traffic through Tor. For inbound onion: **Interfaces → Peer Interface → Add Onion Service**.
+**Leave Database Mode on Full Indexed** if you want Fulcrum or a block explorer to work. The other modes do not build the transaction index those services need, and switching back means syncing the chain again from the start.
+
+### Routing outbound traffic through Tor
+
+Install the Tor package, then turn on **Tor Routing** in **Node Settings**. This is for outbound connections to other nodes; to accept inbound connections over Tor, add an onion address to the **Peer Interface** instead — that works whether or not the toggle is on.
 
 ## Maintenance
 
-- **Delete Peer List** — stop the service first, then run this to reset peer discovery and unban seeds. Stop now kills the node within 45 seconds.
-- **Delete Test Network Data** — stop first, then wipe selected test-network chain data (including the network you are currently on). Mainnet is never touched.
-- **RPC Credentials** — username, password, port
-- **Node Info** — runtime summary
+Knuth has to be stopped before any of these will run, and none of them can be undone.
+
+- **Delete Peer List** — throws away everything Knuth knows about other nodes, including any it has banned, and rediscovers from scratch. This is the fix when Knuth sits at zero peers, which usually means it kept the banned peers from a network you were previously on.
+- **Delete Test Network Data** — frees the disk a test network is using. Mainnet cannot be selected and is never affected.
+- **Rebuild Blockchain Database** — deletes the chain for the network you are currently on so Knuth downloads it again. Only reach for this if the database is genuinely corrupted; on mainnet it means hours of resyncing. Your peer list and JSON-RPC credentials are kept.
+
+**Node Info** is safe to run at any time while Knuth is running, and just reports the current network and whether chain data is present.
 
 ## Limitations
 
-- Sync progress prefers the compatibility sidecar's tip. Knuth's own RPC `blocks` can lag `headers` by a few at the tip and used to show **Syncing 100%** forever; that is treated as **Synced**.
-- The official upstream container image must be built with `rpc=True` for the JSON-RPC server to exist at all; this package expects that.
-- Blockchain data is not included in StartOS backups — after restore the node re-syncs.
-- **RPC compatibility sidecar (1.3.0:6):** Knuth v1.3.0's `getblock`/`getrawtransaction` look in a store that was removed when blocks moved to `blk*.dat`. This package sits a small sidecar in front of JSON-RPC that serves those methods from the block files and adds `getnetworkinfo`, classic `getblocktemplate`/`submitblock`, and `validateaddress` so Fulcrum, BCH Explorer, ASICSeer, and EloPool can use Knuth. JSON-RPC bodies end with a newline so EloPool/ckpool can parse GBT.
+- **Only 64-bit x86 servers can realistically run this.** Knuth is compiled for x86 only; on ARM or RISC-V hardware StartOS runs it through emulation, which is far too slow to sync mainnet.
+- **Your backup does not include the chain.** It keeps your settings and your JSON-RPC credentials, so a restored Knuth is configured correctly — but it has to sync the chain again from the beginning before it is useful.
+- **Knuth does not support I2P.** The I2P row on the service page is always shown as unavailable.

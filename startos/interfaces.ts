@@ -1,9 +1,18 @@
+import { i18n } from './i18n'
 import { sdk } from './sdk'
 import { peerInterfaceId, rpcInterfaceId, networkPorts, Network } from './utils'
-import { storeJson } from './file-models/store.json'
+import { storeJson } from './fileModels/store.json'
 
 export const setInterfaces = sdk.setupInterfaces(async ({ effects }) => {
-  const store = await storeJson.read().once()
+  // Reactive: the Network action changes both ports and the JSON-RPC toggle
+  // adds or drops an interface, so this pass has to re-run on either.
+  const store = await storeJson
+    .read((s) => ({
+      network: s.network,
+      rpcEnabled: s.rpcEnabled,
+      rpcUser: s.rpcUser,
+    }))
+    .const(effects)
   const network: Network = store?.network ?? 'mainnet'
   const { peer: peerPort, rpc: rpcPort } = networkPorts[network]
   const rpcEnabled = store?.rpcEnabled ?? false
@@ -19,9 +28,9 @@ export const setInterfaces = sdk.setupInterfaces(async ({ effects }) => {
     secure: { ssl: false },
   })
   const peer = sdk.createInterface(effects, {
-    name: 'Peer Interface',
+    name: i18n('Peer Interface'),
     id: peerInterfaceId,
-    description: 'Peer-to-peer connections on the Bitcoin Cash network',
+    description: i18n('Peer-to-peer connections on the Bitcoin Cash network'),
     type: 'p2p',
     masked: false,
     schemeOverride: { ssl: null, noSsl: null },
@@ -41,10 +50,11 @@ export const setInterfaces = sdk.setupInterfaces(async ({ effects }) => {
       secure: { ssl: false },
     })
     const rpc = sdk.createInterface(effects, {
-      name: 'JSON-RPC Interface',
+      name: i18n('JSON-RPC Interface'),
       id: rpcInterfaceId,
-      description:
+      description: i18n(
         'Bitcoin-Cash-compatible JSON-RPC for mining pools and other services',
+      ),
       type: 'api',
       masked: true,
       schemeOverride: { ssl: null, noSsl: null },

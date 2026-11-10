@@ -1,214 +1,242 @@
-<div align="center">
-  <img src="icon.svg" alt="Knuth logo" width="21%" />
-  <h1>Knuth</h1>
-</div>
+<p align="center">
+  <img src="icon.svg" alt="Knuth Logo" width="21%" />
+</p>
 
-> **Upstream docs:** [github.com/k-nuth/kth](https://github.com/k-nuth/kth) · [kth.cash](https://kth.cash)
->
-> Knuth is a high-performance Bitcoin Cash full node written in C++. This StartOS
-> package mirrors the BCHN / BCHD / Flowee schema: per-network ports, optional
-> JSON-RPC (v1.3.0+), Tor dependency, and test-network data isolation under
-> `/data/<network>/`.
->
-> **Versioning:** the number before `:` is **kth upstream** (today `1.3.0`). The
-> number after `:` is the StartOS package revision, starting at `:0`
-> (`1.3.0:0`, `1.3.0:1`, …). Packaging-only fixes bump `:N` only — never invent
-> a fake kth version.
+# Knuth on StartOS
+
+> Everything not listed in this document should behave the same as upstream
+> Knuth. If a feature, setting, or behavior is not mentioned here, the
+> upstream documentation is accurate and fully applicable — see the
+> Documentation section of `instructions.md` for links.
+
+[Knuth](https://github.com/k-nuth/kth) is a Bitcoin Cash full node written in C++. Two things about this package are not upstream behavior: it is **built from source** so the JSON-RPC server exists at all, and the JSON-RPC port a dependent service connects to is served by a **compatibility sidecar**, not by kth directly.
+
+- **Upstream repo:** <https://github.com/k-nuth/kth>
+- **Wrapper repo:** <https://github.com/Start9-Community/knuth-bch-startos>
 
 ---
 
 ## Table of Contents
 
-1. [Image and Container Runtime](#1-image-and-container-runtime)
-2. [Volume and Data Layout](#2-volume-and-data-layout)
-3. [Installation and First-Run Flow](#3-installation-and-first-run-flow)
-4. [Default Networking](#4-default-networking)
-5. [Configuration Management](#5-configuration-management)
-6. [Network Access and Interfaces](#6-network-access-and-interfaces)
-7. [Actions (StartOS UI)](#7-actions-startos-ui)
-8. [Backups and Restore](#8-backups-and-restore)
-9. [Health Checks](#9-health-checks)
-10. [Dependencies](#10-dependencies)
-11. [Default Overrides](#11-default-overrides)
-12. [Limitations and Differences](#12-limitations-and-differences)
-13. [What Is Unchanged from Upstream](#13-what-is-unchanged-from-upstream)
-14. [Contributing](#14-contributing)
-15. [Quick Reference for AI Consumers](#15-quick-reference-for-ai-consumers)
+- [Image and Container Runtime](#image-and-container-runtime)
+- [Volume and Data Layout](#volume-and-data-layout)
+- [File Models](#file-models)
+- [Dependencies](#dependencies)
+- [Network Access and Interfaces](#network-access-and-interfaces)
+- [Installation and First-Run Flow](#installation-and-first-run-flow)
+- [Actions](#actions)
+- [Tasks](#tasks)
+- [Health Checks](#health-checks)
+- [Backups and Restore](#backups-and-restore)
+- [Limitations and Differences](#limitations-and-differences)
+- [Quick Reference for AI Consumers](#quick-reference-for-ai-consumers)
 
 ---
 
-## 1. Image and Container Runtime
+## Image and Container Runtime
 
-| Field | Value |
-|---|---|
-| **Image ID** | `knuth` |
-| **Build** | `Dockerfile` copies `kth` + GCC 15 runtime from upstream `ghcr.io/k-nuth/kth` (or a local RPC-enabled build until upstream ships `rpc=True`) |
-| **Architectures** | `x86_64`, `aarch64`, `riscv64` (kth is compiled on amd64; other arches use StartOS qemu via `emulateMissingAs`) |
-| **Command** | `kth -c /data/kth.cfg --init_run --network <name>` |
+One image, built here from upstream source rather than pulled.
+
+| Property      | Value                                                  |
+| ------------- | ------------------------------------------------------ |
+| Image         | built from `Dockerfile` (kth compiled with `rpc=True`) |
+| Architectures | x86_64 native; aarch64 and riscv64 emulated as x86_64  |
+| Command       | `kth -c /data/kth.cfg --init_run --network <name>`     |
+
+| Subcontainer | Purpose                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `knuth-sub`  | Shared by the `primary` and `rpc-compat` daemons and by every action's temporary container — the one to `attach` to |
+
+The build is from source because the published `ghcr.io/k-nuth/kth` image omits the `rpc` conan option, so it has no JSON-RPC server. The toolchain image upstream publishes is amd64-only, which is why the manifest sets `emulateMissingAs: 'x86_64'`: on ARM or RISC-V hardware this runs under emulation, at a speed that makes an initial sync impractical. Treat non-x86_64 as functional, not usable for mainnet.
+
+The runtime image also carries `curl` and `python3` — `curl` because kth ships no RPC client to health-check with, `python3` for the compatibility sidecar below.
+
+## Volume and Data Layout
+
+One volume, laid out per network so switching networks never mixes chain state or peer bans.
+
+| Path                           | Contents                                         |
+| ------------------------------ | ------------------------------------------------ |
+| `/data/kth.cfg`                | kth's configuration file                         |
+| `/data/store.json`             | This package's own state                         |
+| `/data/blockchain/`            | Mainnet chain data, UTXO-Z database, block store |
+| `/data/<network>/`             | The same, per test network                       |
+| `/data/peers.dat`              | Mainnet peer and ban list                        |
+| `/data/<network>/peers.dat`    | The same, per test network                       |
+| `/data/debug.log`, `error.log` | kth's own logs                                   |
+
+Both `net.hosts_file` and `db.directory` are written explicitly on every network change, because kth's own defaults put the chain in one place regardless of network and write `peers.dat` to the process working directory — outside the volume entirely.
+
+## File Models
+
+Two, and they hold different kinds of state.
+
+| Model       | File               | Seeded by              | Rewritten by                                                                                                                         |
+| ----------- | ------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `knuthConf` | `/data/kth.cfg`    | `seedFiles` at install | **Node Settings**, **Network**, **Mempool & Block Policy**, **RPC & Peers Settings**, **Auto-Configure**, and the credential actions |
+| `storeJson` | `/data/store.json` | `seedFiles` at install | **Node Settings**, **Network**, **Auto-Configure**, the credential actions, and the `synced-true` oneshot                            |
+
+`kth.cfg` declares far more keys than any action exposes. The `[fork]` group and the protocol service bits are declared so that a hand-edited file **round-trips** through `merge` instead of being dropped — they are deliberately not offered in the UI, because overriding a consensus parameter forks the node off the real chain.
+
+**A hand edit survives, with two exceptions.** `rpc.bind` and `rpc.port` are re-asserted on every start when the JSON-RPC server is on, because kth must stay bound to loopback for the sidecar arrangement to hold; and `net.inbound_port`, `net.hosts_file`, and `db.directory` are rewritten whenever the network changes. Everything else is yours once set.
+
+**A misspelled key fails silently.** kth calls `allow_config_extras()`, so an unrecognised key is ignored and the node runs on its own default with no warning. An _invalid value_ for a recognised key does the opposite and aborts startup with "illegal value" — which is why `log.statistics_server` and `net.self` are omitted rather than written blank, and why the 1.3.0 `db.db_mode` value rename needed a migration.
+
+## Dependencies
+
+One, optional, and always declared so its card stays visible.
+
+| Dependency | Kind                                          | Why                                |
+| ---------- | --------------------------------------------- | ---------------------------------- |
+| `tor`      | `exists`, or `running` when Tor Routing is on | Outbound peer connections over Tor |
+
+It is declared even when Tor Routing is off — as `exists` rather than `running` — because a dependency this package does not return is not listed at all, and the card is how a user discovers the option.
+
+## Network Access and Interfaces
+
+kth listens on exactly two ports. The peer interface is always exported; the JSON-RPC one appears only when the JSON-RPC server is turned on.
+
+| Interface          | Id     | Type | Port                       | Description                                          |
+| ------------------ | ------ | ---- | -------------------------- | ---------------------------------------------------- |
+| Peer Interface     | `peer` | p2p  | per network (8333 mainnet) | Peer-to-peer connections on the Bitcoin Cash network |
+| JSON-RPC Interface | `rpc`  | api  | per network (8332 mainnet) | Bitcoin-Cash-compatible JSON-RPC, masked             |
+
+**The exported JSON-RPC port is not kth's.** kth itself is pinned to `127.0.0.1:19332`, and the exported port is served by `rpc_compat.py`, a Python sidecar in the same container that proxies to kth and fills in what kth cannot answer. kth 1.3.0's `fetch_block()` is a stub, so `getblock` and `getrawtransaction` return nothing and `getnetworkinfo` is absent — a dependent pointed straight at kth fails in ways that look like a broken node. The sidecar reads the block store on disk to answer those, and passes everything else through.
+
+Both interfaces re-derive when the network changes or the JSON-RPC server is toggled, so the ports follow the selected network without waiting for a package update.
+
+## Installation and First-Run Flow
+
+Nothing to configure, and no prompt. `seedFiles` runs once at install: it writes `kth.cfg` with mainnet's ports and paths, generates a JSON-RPC username and a cryptographically random password, and leaves the JSON-RPC server **off**. The node starts on mainnet and begins syncing immediately.
+
+Nothing in this package raises a task, so the ordinary controls are available from the moment it installs.
+
+The JSON-RPC credential is generated at install and then left alone — updates never rotate it, so a dependent configured once keeps working.
+
+## Actions
+
+Ten user-facing actions in four groups, plus one hidden. What follows is what the OS metadata cannot carry.
+
+### Configuration
+
+**Node Settings**, **Mempool & Block Policy**, and **RPC & Peers Settings** all write `kth.cfg` and restart the node — a few seconds' interruption, and idempotent. They are split the way BCHN splits them so the three BCH node packages read alike.
+
+Two Node Settings fields cost more than a restart. **Database Mode** decides whether a transaction index exists at all: leaving Full Indexed makes Fulcrum and BCH Explorer unable to connect, and coming back requires a full resync, because kth has no in-place reindex. **Maximum Database Size** applies only in Pruned mode and is ignored otherwise.
+
+**Network** additionally rewrites the chain directory, the hosts file, and the peer port, then restarts. Switching to a network with no data on disk starts a sync from genesis for that network; the network you left keeps its data and comes back untouched if you switch again. It is a no-op if the selected network is already active, and says so.
+
+### Credentials
+
+**Generate RPC Credentials** rotates the single password kth supports — there is no second credential to fall back on, so every dependent breaks until it is updated. **Delete RPC Credentials** clears both fields; kth then falls back to a generated cookie file, so the node keeps working and only shared-password clients lose access. **RPC Credentials** is read-only and reports that the server is off rather than showing a credential that nothing is listening for.
+
+All three restart the node.
+
+### Maintenance
+
+All three require the service to be **stopped**, and none can be undone.
+
+**Delete Peer List** removes the hosts file, including bans. Cheap; the node rebuilds from DNS seeds in minutes. Reach for it when the node sits at zero peers.
+
+**Delete Test Network Data** frees the disk a test network is using. Mainnet is not selectable. Selecting the active network also clears the synced flag.
+
+**Rebuild Blockchain Database** deletes the chain, UTXO-Z, and block store for the **active** network. This is a full re-download — hours on mainnet — and exists because kth has no in-place reindex. It keeps the peer list and the JSON-RPC credentials. Use it for a corrupted database, not as a first troubleshooting step.
+
+### Other
+
+**Node Info** is read-only and requires the service to be running. It reports the network, the peer port, and whether chain data exists.
+
+### Hidden
+
+**Auto-Configure** (`autoconfig`) is invoked by another package, not by a person; a support agent should never tell a user to run it. It applies only the fields the caller supplied and leaves the rest alone.
+
+## Tasks
+
+None. This package raises no tasks, so the service is never held on a prompt and its ordinary controls are always available.
+
+## Health Checks
+
+Nine rows, and only four of them probe anything. Reading them as if they were all liveness checks is the main way to misdiagnose this package.
+
+| Check              | Displayed         | What it actually does                                                                            |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `primary`          | RPC               | Calls `getblockchaininfo` on kth's loopback port; with JSON-RPC off, checks the process is alive |
+| `rpc-compat`       | RPC Compatibility | Expects 200 or 401 from the sidecar; reports disabled when JSON-RPC is off                       |
+| `sync-progress`    | Blockchain Sync   | Chain height, from the sidecar when available and `debug.log` otherwise                          |
+| `peer-connections` | Peer Connections  | Peer count parsed out of `debug.log`                                                             |
+| `tor`              | Tor               | Whether the Tor package is installed and running                                                 |
+| `utxoz`            | UTXO-Z Storage    | Whether the UTXO-Z directory exists                                                              |
+| `i2p`              | I2P               | Constant — kth has no I2P support                                                                |
+| `clearnet`         | Clearnet          | Constant                                                                                         |
+| `ipc-capi`         | IPC / C-API       | Reports a stored flag                                                                            |
+
+**Blockchain Sync prefers the sidecar's height over kth's own.** kth's `blocks` field routinely trails `headers` by a few at the tip, which read naively renders as "Syncing 100.00%" forever; a gap under 0.1% is therefore treated as synced. Its fallback path parses `debug.log`, which matters during early sync when RPC reports genesis while the coordinator log already shows real progress.
+
+**Peer Connections is log-derived**, so it reports "no peers" for the first minute of a start simply because nothing has been logged yet, and it will stay wrong if upstream changes that log line's format. Persistent zero after a few minutes is a real symptom — usually a peer list carrying bans from a different network, which **Delete Peer List** fixes.
+
+The last three rows are **advertisements, not probes**: `i2p` is always disabled, `clearnet` always succeeds, and `ipc-capi` reflects a toggle. They exist so a dependent service and its user can see which capabilities this node claims. Do not read a green `ipc-capi` as evidence that anything was tested.
+
+## Backups and Restore
+
+The `main` volume is copied wholesale, minus the chain — `sdk.Backups.ofVolumes('main')` with every network's data directory, both `peers.dat` locations, and the two log files excluded.
+
+So a backup holds `kth.cfg` and `store.json`: the configuration, the network selection, and the JSON-RPC credentials. That keeps the archive small and keeps dependents working after a restore, since the credential they were configured with comes back. **A restored node syncs the chain from genesis** — that is the trade, and on mainnet it is a multi-hour operation before the node is useful again.
+
+## Limitations and Differences
+
+1. **The exported JSON-RPC port is a compatibility sidecar, not kth.** It answers `getblock`, `getrawtransaction`, and `getblocktemplate` from the block store on disk, because kth 1.3.0's `fetch_block()` is a stub. Anything the sidecar does not implement is proxied to kth, and anything kth does not implement is absent.
+2. **Only x86_64 is native.** aarch64 and riscv64 run the amd64 image under emulation; the node works but is too slow to sync mainnet.
+3. **No I2P.** kth has no I2P support; the health row is a placeholder.
+4. **Tor is outbound-preference only.** kth exposes no SOCKS or onion command-line options, so the toggle marks the dependency and surfaces Tor's health rather than configuring a proxy. Inbound Tor is a StartOS onion address on the peer interface, which works regardless of the toggle.
+5. **One JSON-RPC credential.** kth has a single `rpc.user`/`rpc.password` pair, not BCHN's multiple `rpcauth` entries, so rotating it breaks every dependent at once.
+6. **No in-place reindex.** kth's only chain-init flag builds a fresh database, so the repair action re-downloads rather than re-verifying.
+7. **The chain is not backed up.** Restoring gives you a configured node that must sync from genesis.
 
 ---
 
-## 2. Volume and Data Layout
-
-| Volume Name | Mount Point | Purpose |
-|---|---|---|
-| `main` | `/data` | Config, store, and all chain data |
-
-**StartOS-managed files:**
-
-| Path | Managed By | Purpose |
-|---|---|---|
-| `kth.cfg` | `knuth.conf` file model | Node INI config (v1.3.0 key names: `net.*`, `db.*`, `chain.*`, `node.*`, `rpc.*`) |
-| `store.json` | `store.json` file model | network, rpcEnabled, credentials, IPC/UTXOZ/Tor flags |
-
-**Chain layout (same schema as BCHN/BCHD/Flowee):**
-
-| Path | Network |
-|---|---|
-| `/data/blockchain` | mainnet chain DB |
-| `/data/peers.dat` | mainnet hosts pool |
-| `/data/testnet3`, `/data/testnet4`, `/data/scalenet`, `/data/chipnet`, `/data/regtest` | per-testnet chain + peers |
-
----
-
-## 3. Installation and First-Run Flow
-
-1. Seed `store.json` + `kth.cfg` (mainnet, RPC off, IPC/UTXOZ on, generated RPC creds).
-2. Launch `kth -c /data/kth.cfg --init_run --network mainnet`.
-3. Health: chaindir liveness when RPC is off; RPC + sync checks when RPC is on.
-4. Enable JSON-RPC in Node Settings for mining pools / Fulcrum / Explorer backends.
-
----
-
-## 4. Default Networking
-
-| Transport | Default | How to Change |
-|---|---|---|
-| **Clearnet** | Enabled | StartOS interfaces |
-| **Tor** | Off | Node Settings + Tor package |
-| **I2P** | Not implemented | — |
-
----
-
-## 5. Configuration Management
-
-| Group | Settings |
-|---|---|
-| **Network** | mainnet / testnet3 / testnet4 / scalenet / chipnet / regtest — rewrites peer port, RPC port, `db.directory`, `net.hosts_file` |
-| **Node Settings** | db mode (`full` / `blocks` / `pruned`), max size (pruned), connections, latency, verbose log, **JSON-RPC toggle**, IPC, UTXOZ, Tor |
-
----
-
-## 6. Network Access and Interfaces
-
-| Interface | Port (mainnet) | Purpose | Condition |
-|---|---|---|---|
-| Peer | 8333 | P2P | Always |
-| JSON-RPC | 8332 | API | When `rpcEnabled` |
-
-Per-network peer/RPC ports match the shared BitcoinCash1 table (see Quick Reference).
-
----
-
-## 7. Actions (StartOS UI)
-
-| Action ID | Name | Group |
-|---|---|---|
-| `runtime-info` | Node Info | Info |
-| `network-config` | Network | Configuration |
-| `node-settings` | Node Settings | Configuration |
-| `rpc-credentials` | RPC Credentials | Credentials |
-| `delete-peer-list` | Delete Peer List | Maintenance (stopped only) |
-| `delete-test-network-data` | Delete Test Network Data | Maintenance (stopped only; can wipe the active testnet) |
-| `rebuild-chain-data` | Rebuild Blockchain Database | Maintenance (stopped only) |
-| `autoconfig` | Auto-Configure | Hidden (cross-package) |
-
----
-
-## 8. Backups and Restore
-
-**Backed up:** `kth.cfg`, `store.json` (credentials, flags).
-
-**Excluded:** chain dirs (`/blockchain`, testnet subdirs), `peers.dat`, logs.
-
----
-
-## 9. Health Checks
-
-| Check | When | Method |
-|---|---|---|
-| **RPC** (daemon ready) | Always | `getblockchaininfo` when JSON-RPC is on; otherwise the `kth` process |
-| **Blockchain Sync** | Always | Sidecar `getblockchaininfo` (lifts stale kth `blocks` to the blk*.dat tip). A &lt;0.1% header gap at the tip is **Synced**, not `Syncing 100%`. |
-| **Peer Connections** | Always | Knuth `Peers: n/m` status log (no `getpeerinfo` in v1.3.0) |
-| **Tor** | Always | Optional — listed as a dependency; health is disabled until Tor routing is turned on |
-| **I2P** | Always | Disabled (same as BCHN/Flowee until implemented) |
-| **Clearnet** | Always | Outbound unless a public address is published |
-| **UTXO-Z Storage** / **IPC / C-API** | Always | Knuth-specific capability rows |
-
----
-
-## 10. Dependencies
-
-| Package | Optional | Purpose |
-|---|---|---|
-| `tor` | yes (optional) | Always listed on the Dependencies tab (`kind: exists` when Tor Routing is off, `kind: running` when on). Not required to be running unless **Node Settings → Tor Routing** is enabled. |
-
----
-
-## 11. Default Overrides
-
-| Setting | StartOS value | Reason |
-|---|---|---|
-| `--init_run` | always | init chain then run |
-| `--network` | from store | v1.3.0 network select |
-| `db.db_mode` | `full` | indexed; required for Fulcrum/Explorer |
-| `rpc.enabled` | false | opt-in; credentials pre-generated |
-| `rpc.bind` | `0.0.0.0` | reachable from other containers |
-| `net.hosts_file` | under `/data` | kth defaults to CWD `/` |
-| IPC / UTXOZ | true | capability flags for dependents |
-
----
-
-## 12. Limitations and Differences
-
-1. **Official `ghcr.io/k-nuth/kth` may lack RPC** until upstream builds with `rpc=True` (see `k-nuth/docker-images` PR #7). This package can use a local RPC-enabled image interim.
-2. **No `initialblockdownload` / `verificationprogress`** — sync health uses Knuth's coordinator log (RPC `getblockchaininfo.blocks` is often 0 at the tip).
-3. **gRPC not exposed** in this package.
-4. Tor proxy passthrough to `kth` is opt-in; verify after enabling.
-5. **RPC compatibility sidecar** — kth 1.3.0 `fetch_block()` is a stub after the LMDB→`blk*.dat` move (`object does not exist` for every hash). The package runs `scripts/rpc_compat.py` on the public RPC port and leaves kth on `127.0.0.1:19332`. Ready probes kth on that internal port so the sidecar can start. The sidecar also implements `getnetworkinfo`, classic `getblocktemplate` (from `getblocktemplatelight`), `submitblock`→`submitblocklight`, and cashaddr `validateaddress`. JSON-RPC bodies end with a trailing LF so ckpool/EloPool (`read_socket_line`) does not hang 20s after `HTTP/1.1 200 OK`.
-
----
-
-## 13. What Is Unchanged from Upstream
-
-- Consensus / P2P protocol from `k-nuth/kth`
-- Config key names and `db_mode` values from v1.3.0
-- IPC/C-API and UTXOZ behavior
-
----
-
-## 14. Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md)
-
----
-
-## 15. Quick Reference for AI Consumers
+## Quick Reference for AI Consumers
 
 ```yaml
 package_id: knuth-bch
-upstream_repo: https://github.com/k-nuth/kth
-package_repo: https://github.com/BitcoinCash1/knuth-bch-startos
-command: [kth, -c, /data/kth.cfg, --init_run, --network, <name>]
-networks:
-  mainnet:  { peer: 8333,  rpc: 8332,  db: /data/blockchain, hosts: /data/peers.dat }
-  testnet3: { peer: 18333, rpc: 18332, db: /data/testnet3 }
-  testnet4: { peer: 28333, rpc: 28332, db: /data/testnet4 }
-  scalenet: { peer: 38333, rpc: 38332, db: /data/scalenet }
-  chipnet:  { peer: 48333, rpc: 48332, db: /data/chipnet }
-  regtest:  { peer: 18444, rpc: 18443, db: /data/regtest }
-config_keys_v1_3_0: [net.*, db.*, chain.*, node.*, rpc.*, log.*]
-db_mode: [full, blocks, pruned]   # not full_indexed/normal
-rpc_available: true               # when image built with rpc=True and toggle on
-schema_reference: bitcoin-cash-node-startos
+image: built from Dockerfile # k-nuth/kth compiled with rpc=True
+architectures:
+  - x86_64 # native
+  - aarch64 # emulated as x86_64
+  - riscv64 # emulated as x86_64
+subcontainers:
+  - knuth-sub # shared by both daemons and every action
+volumes:
+  main: /data
+file_models:
+  - /data/kth.cfg
+  - /data/store.json
+startos_managed_env_vars: []
+dependencies:
+  - tor # optional; exists, or running when Tor Routing is on
+interfaces:
+  peer: { type: p2p, port: 8333 } # mainnet; per-network
+  rpc: { type: api, port: 8332 } # mainnet; per-network, only when JSON-RPC is on
+actions:
+  - node-settings
+  - network-config
+  - mempool-policy
+  - rpc-peers-settings
+  - generate-rpc-credentials
+  - delete-rpc-credentials
+  - rpc-credentials
+  - delete-peer-list
+  - delete-test-network-data
+  - rebuild-chain-data
+  - runtime-info
+  - autoconfig # hidden; called by another package
+tasks: []
+health_checks:
+  - primary # displayed "RPC"
+  - rpc-compat # displayed "RPC Compatibility"
+  - sync-progress # displayed "Blockchain Sync"
+  - peer-connections # displayed "Peer Connections"
+  - tor
+  - utxoz # capability advertisement
+  - i2p # capability advertisement, always disabled
+  - clearnet # capability advertisement, always success
+  - ipc-capi # capability advertisement
 ```
